@@ -11,6 +11,23 @@ Tap a button, and the app creates a sample envelope, opens the signing ceremony 
 
 Both apps talk to a small [demo server](server/) that holds the SignatureAPI key and creates envelopes. The key never ships in the apps.
 
+<table>
+  <tr>
+    <th>iOS</th>
+    <th>Android</th>
+  </tr>
+  <tr>
+    <td><a href="docs/media/ios-signing.mp4"><img src="docs/media/ios-signing.gif" width="280" alt="iOS: tap Sign document, sign in the WKWebView, finish, and see Document signed"></a></td>
+    <td><a href="docs/media/android-signing.mp4"><img src="docs/media/android-signing.gif" width="280" alt="Android: tap Sign document, sign in the WebView, finish, and see Document signed"></a></td>
+  </tr>
+  <tr>
+    <td>iPhone 17 Pro simulator, iOS 26</td>
+    <td>Galaxy A55, Android 16</td>
+  </tr>
+</table>
+
+Both recordings are real UI test runs against SignatureAPI test mode. Select one for the full-quality video.
+
 **New to embedding in a native app?** Read [Embedding SignatureAPI in native apps](docs/embedding-in-native-apps.md). It covers the pattern, the events, cookies and storage, iframes, link lifetime and testing, and every claim in it is checked by this repo's tests.
 
 ## How it works
@@ -91,7 +108,7 @@ ios/       iOS app (SwiftUI) and its UI tests
 android/   Android app (Jetpack Compose) and its instrumented tests
 e2e/       Browser tests (Playwright): ceremony behavior in WebKit and Chromium
 design/    Shared brand fonts and their licenses
-docs/      Embedding guide
+docs/      Embedding guide and the demo recordings
 ```
 
 ## License

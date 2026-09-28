@@ -30,5 +30,6 @@ e2e/blob-report/
 # Local notes, never committed
 *.local.md
 
-# Screen recordings (shared directly, not versioned)
+# Screen recordings: only the ones the docs show are versioned
 *.mp4
+!docs/media/*.mp4
