@@ -1,0 +1,91 @@
+import XCTest
+
+/// End-to-end: the real app, a real WKWebView and a real test-mode ceremony.
+///
+/// Needs the demo server running (cd server && npm run dev). If it is not on
+/// http://localhost:3000, pass its address to the test runner:
+///   TEST_RUNNER_DEMO_SERVER_URL=http://localhost:3100 xcodebuild test …
+final class EmbeddedSigningUITests: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    /// The app must intercept signatureapi-message://ceremony.completed and then
+    /// show "Document signed" only after the server confirms it.
+    @MainActor func testSigningTheSampleDocument() throws {
+        let app = launch()
+        let web = try openCeremony(in: app)
+
+        tapWhenReady(try checkbox(in: web, labelPrefix: "By checking"))
+        tapWhenReady(web.buttons["Agree and Continue"])
+        tapWhenReady(web.buttons["Sign here"])
+        tapWhenReady(try checkbox(in: web, labelPrefix: "By selecting"))
+        tapWhenReady(web.buttons["Adopt and Sign"])
+        tapWhenReady(web.buttons["Finish"])
+
+        let title = app.staticTexts["result-title"]
+        XCTAssertTrue(title.wait(for: \.label, toEqual: "Document signed", timeout: 45), "last result title: \(title.label)")
+        holdForRecording()
+    }
+
+    /// Cancelling inside the ceremony emits ceremony.canceled, which must reach the app.
+    @MainActor func testCancellingInsideTheCeremony() throws {
+        let app = launch()
+        let web = try openCeremony(in: app)
+
+        tapWhenReady(web.buttons["Cancel"])
+        tapWhenReady(web.buttons["Yes"])
+
+        let title = app.staticTexts["result-title"]
+        XCTAssertTrue(title.wait(for: \.label, toEqual: "Signing canceled", timeout: 30), "last result title: \(title.label)")
+    }
+
+    // MARK: Helpers
+
+    @MainActor private func launch() -> XCUIApplication {
+        let app = XCUIApplication()
+        if let server = ProcessInfo.processInfo.environment["DEMO_SERVER_URL"] {
+            app.launchEnvironment["DEMO_SERVER_URL"] = server
+        }
+        app.launch()
+        return app
+    }
+
+    @MainActor private func openCeremony(in app: XCUIApplication) throws -> XCUIElement {
+        app.buttons["sign-document"].tap()
+        let web = app.webViews.firstMatch
+        let agree = web.buttons["Agree and Continue"]
+        if !agree.waitForExistence(timeout: 60) {
+            let error = app.staticTexts["start-error"]
+            XCTFail(error.exists ? "Could not start: \(error.label)" : "The ceremony did not load")
+        }
+        return web
+    }
+
+    /// Keeps the final screen up for screen recordings:
+    ///   TEST_RUNNER_DEMO_RECORDING_HOLD=3 xcodebuild test …
+    @MainActor private func holdForRecording() {
+        if let seconds = ProcessInfo.processInfo.environment["DEMO_RECORDING_HOLD"].flatMap(Double.init) {
+            Thread.sleep(forTimeInterval: seconds)
+        }
+    }
+
+    /// Web content animates in; a tap before it settles is lost.
+    @MainActor private func tapWhenReady(_ element: XCUIElement, timeout: TimeInterval = 20, file: StaticString = #filePath, line: UInt = #line) {
+        let ready = element.waitForExistence(timeout: timeout) && element.wait(for: \.isHittable, toEqual: true, timeout: timeout)
+        XCTAssertTrue(ready, "\(element) never became tappable", file: file, line: line)
+        Thread.sleep(forTimeInterval: 0.4)
+        element.tap()
+    }
+
+    /// Web checkboxes surface as switches or check boxes depending on the WebKit build.
+    @MainActor private func checkbox(in web: XCUIElement, labelPrefix: String) throws -> XCUIElement {
+        let types = [XCUIElement.ElementType.switch.rawValue, XCUIElement.ElementType.checkBox.rawValue]
+        let predicate = NSPredicate(format: "elementType IN %@ AND label BEGINSWITH %@", types, labelPrefix)
+        let element = web.descendants(matching: .any).matching(predicate).firstMatch
+        if !element.waitForExistence(timeout: 15) {
+            XCTFail("No checkbox labelled “\(labelPrefix)…”. Web content:\n\(web.debugDescription)")
+        }
+        return element
+    }
+}
