@@ -1,0 +1,34 @@
+.DS_Store
+
+# node
+node_modules/
+
+# server
+server/.env
+server/dist/
+
+# ios
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/build/
+DerivedData/
+
+# android
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/build/
+android/app/build/
+android/.idea/
+*.iml
+
+# e2e
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
+
+# Local notes, never committed
+*.local.md
+
+# Screen recordings (shared directly, not versioned)
+*.mp4

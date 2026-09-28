@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Signing ceremony</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #ffffff; }
+  iframe { display: block; width: 100%; height: 100%; border: 0; }
+</style>
+</head>
+<body>
+<iframe id="ceremony" title="Signing ceremony" src="{{CEREMONY_SRC}}"></iframe>
+<script>
+  // Host page for embedding the ceremony in an <iframe>, the way a web SDK does,
+  // served from a synthetic https origin (https://app.demo.invalid) that is
+  // listed in the ceremony's embeddable_in. A native app can do the same with
+  // WKWebView.loadHTMLString(_:baseURL:) or WebView.loadDataWithBaseURL.
+  //
+  // The ceremony src uses event_delivery=message: terminal events arrive as
+  // postMessage calls. Only messages from the ceremony's origin AND from this
+  // iframe's window are forwarded; everything else is reported as
+  // rejected so the check can be seen working.
+  (function () {
+    var CEREMONY_ORIGIN = {{CEREMONY_ORIGIN_JSON}};
+    var frame = document.getElementById("ceremony");
+
+    function deliver(kind, payload) {
+      var message = JSON.stringify({ kind: kind, payload: payload });
+      // Native equivalents: webkit.messageHandlers.<name>.postMessage (iOS) or a
+      // WebViewCompat.addWebMessageListener object (Android).
+      if (window.__signatureapiTestBridge) window.__signatureapiTestBridge(message);
+    }
+
+    window.addEventListener("message", function (event) {
+      if (event.origin !== CEREMONY_ORIGIN || event.source !== frame.contentWindow) {
+        deliver("rejected", { origin: event.origin });
+        return;
+      }
+      deliver("event", event.data);
+    });
+  })();
+</script>
+</body>
+</html>

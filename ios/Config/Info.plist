@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The demo server runs on your computer over plain HTTP. Local networking
+	     covers localhost (simulator) and <name>.local hosts (device on the same
+	     Wi-Fi); everything else, including the ceremony, stays on HTTPS. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<!-- Set with the DEMO_SERVER_URL build setting. The DEMO_SERVER_URL launch
+	     environment variable overrides it (used by the UI test). -->
+	<key>DemoServerURL</key>
+	<string>$(DEMO_SERVER_URL)</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connects to the demo server on your computer to create test signing ceremonies.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Inter-Regular.ttf</string>
+		<string>Inter-Medium.ttf</string>
+		<string>Inter-SemiBold.ttf</string>
+		<string>SignatureAPITitle-Medium.ttf</string>
+	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
+</dict>
+</plist>
