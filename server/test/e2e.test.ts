@@ -94,7 +94,9 @@ describe("demo server against SignatureAPI test mode", { skip, timeout: 120_000 
     assert.equal(res.status, 200);
     const current = (await res.json()) as { ceremonyUrl: string; envelopeStatus: string };
     assert.equal(current.envelopeStatus, "in_progress");
-    // The token is re-issued on every read, so the URL differs but still opens.
+    // A standard URL (the default url_variant) is re-issued on every read, so it
+    // differs from the first one but still opens.
+    assert.notEqual(current.ceremonyUrl, topLevel.ceremonyUrl);
     assert.equal(await frameAncestors(embedded(current.ceremonyUrl, "redirect")), "none");
   });
 

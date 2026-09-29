@@ -5,12 +5,13 @@ import android.net.Uri
 /** Turns the ceremony URL from the server into the URL the WebView loads. */
 object CeremonyLink {
     const val HOST = "sign.signatureapi.com"
+    const val ORIGIN = "https://$HOST"
 
     /**
-     * `embedded=true` adapts the ceremony UI; `event_delivery=redirect` makes it
-     * report its ending as a `signatureapi-message://` navigation.
+     * `embedded=true` adapts the ceremony UI; `event_delivery` picks how it
+     * reports its ending (see [CeremonyEventDelivery]).
      */
-    fun embedded(ceremonyUrl: String): String {
+    fun embedded(ceremonyUrl: String, delivery: CeremonyEventDelivery = CeremonyEventDelivery.Redirect): String {
         val uri = Uri.parse(ceremonyUrl)
         val builder = uri.buildUpon().clearQuery()
         uri.queryParameterNames
@@ -18,7 +19,7 @@ object CeremonyLink {
             .forEach { name -> uri.getQueryParameters(name).forEach { builder.appendQueryParameter(name, it) } }
         return builder
             .appendQueryParameter("embedded", "true")
-            .appendQueryParameter("event_delivery", "redirect")
+            .appendQueryParameter("event_delivery", delivery.parameter)
             .build()
             .toString()
     }

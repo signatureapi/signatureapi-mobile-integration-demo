@@ -27,7 +27,8 @@ npm test
 - signing emits `ceremony.completed`, and the server confirms the envelope;
 - `redirect_delay` is honored;
 - canceling emits `ceremony.canceled` and leaves the envelope open;
-- a replaced link fails with `unauthorized`; a completed one with `already_completed`;
+- a replaced link fails with `unauthorized`; a completed one with `already_completed`; a path that isn't a ceremony link with `invalid_link`;
+- `error_message` is fixed English, while the signer sees translated text;
 - `allow_cancel=false` removes every cancel control;
 - typed input survives a rotation;
 - the ceremony opens in the envelope's language.
@@ -37,6 +38,10 @@ npm test
 - messages from anywhere else are rejected;
 - framing is refused when the origin isn't in `embeddable_in`;
 - a replaced link fails over `postMessage`.
+
+**[`organic-input.spec.ts`](tests/organic-input.spec.ts):** the human-input gate. One click at **Finish** (after scrolling the page), or the pointer at only three positions, gets "Confirm to continue"; four positions, a key, a tap or a wheel (Chromium only) complete the ceremony. The other specs pass with plain clicks because signing clicks several controls, so the pointer visits enough positions.
+
+**[`hosts.spec.ts`](tests/hosts.spec.ts):** the ceremony contacts only the documented hosts, and the page images from `vault.signatureapi.com` are signed for one hour.
 
 **[`storage.spec.ts`](tests/storage.spec.ts):** no cookies, no `localStorage`, no `sessionStorage`, and no `Cookie` header on API calls, top-level and framed.
 

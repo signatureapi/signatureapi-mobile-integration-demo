@@ -9,9 +9,10 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.signatureapi.demo.mobile.SigningViewModel
 import com.signatureapi.demo.mobile.SigningViewModel.Phase
+import com.signatureapi.demo.mobile.ceremony.CeremonyEventDelivery
 
 @Composable
-fun DemoApp(viewModel: SigningViewModel) {
+fun DemoApp(viewModel: SigningViewModel, eventDelivery: CeremonyEventDelivery = CeremonyEventDelivery.Redirect) {
     val phase by viewModel.phase.collectAsStateWithLifecycle()
     SignatureApiTheme {
         Surface(color = Brand.background, modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -23,6 +24,7 @@ fun DemoApp(viewModel: SigningViewModel) {
                     ceremonyUrl = current.ceremonyUrl,
                     onEvent = viewModel::onCeremonyEvent,
                     onClose = viewModel::closeCeremony,
+                    eventDelivery = eventDelivery,
                 )
                 Phase.Confirming -> ResultScreen(ending = null, onDone = {}, onStartAgain = {})
                 is Phase.Finished -> ResultScreen(

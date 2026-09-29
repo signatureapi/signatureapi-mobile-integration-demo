@@ -4,10 +4,11 @@ import SwiftUI
 struct CeremonyScreen: View {
     let ceremony: SigningFlow.Ceremony
     let flow: SigningFlow
+    var eventDelivery = CeremonyEventDelivery.configured()
 
     var body: some View {
         NavigationStack {
-            CeremonyWebView(ceremonyURL: ceremony.url) { event in
+            CeremonyWebView(ceremonyURL: ceremony.url, eventDelivery: eventDelivery) { event in
                 Task { await flow.ceremonyEnded(with: event, envelopeId: ceremony.envelopeId) }
             }
             .ignoresSafeArea(.container, edges: .bottom)

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { expect, type FrameLocator, type Page } from "@playwright/test";
 
 /** Synthetic https origin the local host page is served from. */
@@ -14,6 +15,20 @@ export interface CeremonyEvent {
 }
 
 /**
+ * The events a signer's ceremony emits (an approver's Reject also emits
+ * `ceremony.declined`, but the demo server creates only signers). Over
+ * postMessage the apps accept nothing else: a top-level page can also receive
+ * unrelated messages from itself.
+ */
+const TERMINAL_EVENTS = new Set(["ceremony.completed", "ceremony.canceled", "ceremony.failed"]);
+
+/**
+ * The document-start script the apps install for a top-level ceremony with
+ * event_delivery=message. The iOS and Android apps embed byte-for-byte copies.
+ */
+export const TOP_LEVEL_MESSAGE_BRIDGE = fileURLToPath(new URL("./top-level-message-bridge.js", import.meta.url));
+
+/**
  * Parses `signatureapi-message://<type>/?error_type=…&error_message=…`, the URL
  * the ceremony navigates to when event_delivery=redirect. Same rules as the apps.
  */
@@ -21,6 +36,11 @@ export function parseRedirectEvent(url: string): CeremonyEvent | null {
   const parsed = new URL(url);
   if (parsed.protocol !== "signatureapi-message:" || !parsed.host) return null;
   return { type: parsed.host, ...Object.fromEntries(parsed.searchParams) };
+}
+
+function isCeremonyEvent(payload: unknown): payload is CeremonyEvent {
+  const type = (payload as { type?: unknown } | null)?.type;
+  return typeof type === "string" && TERMINAL_EVENTS.has(type);
 }
 
 export function embeddedUrl(ceremonyUrl: string, delivery: Delivery, extra: Record<string, string> = {}): string {
@@ -45,6 +65,8 @@ export async function renderEmbedPage(ceremonySrc: string): Promise<string> {
  * Collects terminal ceremony events the way a native app receives them.
  *
  * - message: the host page forwards postMessage events through a bridge.
+ * - top-level message: the ceremony is the page and posts to its own window.
+ *   top-level-message-bridge.js, the script the apps install, forwards it.
  * - redirect: the ceremony navigates to `signatureapi-message://…`. A desktop
  *   browser cannot open that scheme, but the Navigation API still fires a
  *   `navigate` event for it in both Chromium and WebKit, which is the same
@@ -55,21 +77,68 @@ export async function renderEmbedPage(ceremonySrc: string): Promise<string> {
 export class EventRecorder {
   readonly events: Array<CeremonyEvent & { via: string }> = [];
   readonly rejectedOrigins: string[] = [];
+  /** Messages that passed the origin and source check but are not ceremony events. */
+  readonly ignoredMessages: unknown[] = [];
+  /** Every `signatureapi-message://` navigation seen, whatever the delivery. */
+  readonly redirectNavigations: string[] = [];
 
   static async attach(page: Page, delivery: Delivery): Promise<EventRecorder> {
     const recorder = new EventRecorder();
     if (delivery === "message") {
-      await page.exposeBinding("__signatureapiTestBridge", (_source, raw: string) => {
-        const { kind, payload } = JSON.parse(raw) as { kind: string; payload: CeremonyEvent & { origin?: string } };
-        if (kind === "event") recorder.events.push({ ...payload, via: "postMessage" });
-        else recorder.rejectedOrigins.push(payload.origin ?? "");
-      });
+      await recorder.exposeMessageBridge(page);
       return recorder;
     }
-
-    await page.exposeBinding("__signatureapiNavigation", (_source, url: string) => {
+    await recorder.watchRedirects(page, (url) => {
       const event = parseRedirectEvent(url);
       if (event) recorder.events.push({ ...event, via: "redirect" });
+    });
+    return recorder;
+  }
+
+  /**
+   * For a ceremony opened with `openTopLevel(page, url, "message")`. Installs
+   * the apps' document-start script in the main frame, as WKUserScript
+   * (forMainFrameOnly) and addDocumentStartJavaScript do, and records any
+   * `signatureapi-message://` navigation so a test can assert there is none.
+   */
+  static async attachTopLevelMessages(page: Page): Promise<EventRecorder> {
+    const recorder = new EventRecorder();
+    await recorder.exposeMessageBridge(page);
+    await recorder.watchRedirects(page, () => {});
+    // Stands in for the native object the script posts to. Playwright runs init
+    // scripts in every frame, so define it in the main frame only; without it
+    // the bridge script stays inert, which is what "main frame only" means natively.
+    await page.addInitScript(() => {
+      if (window !== window.top) return;
+      const host = window as unknown as {
+        __signatureapiTestBridge: (raw: string) => void;
+        signatureapiBridge?: { postMessage: (raw: string) => void };
+      };
+      host.signatureapiBridge = { postMessage: (raw) => host.__signatureapiTestBridge(raw) };
+    });
+    await page.addInitScript({ path: TOP_LEVEL_MESSAGE_BRIDGE });
+    return recorder;
+  }
+
+  async next(timeout = 30_000): Promise<CeremonyEvent & { via: string }> {
+    await expect.poll(() => this.events.length, { timeout, message: "no terminal ceremony event" }).toBeGreaterThan(0);
+    return this.events[0]!;
+  }
+
+  /** Receives the `{ kind, payload }` JSON that embed-page.html and top-level-message-bridge.js post. */
+  private async exposeMessageBridge(page: Page) {
+    await page.exposeBinding("__signatureapiTestBridge", (_source, raw: string) => {
+      const { kind, payload } = JSON.parse(raw) as { kind: string; payload: unknown };
+      if (kind !== "event") this.rejectedOrigins.push((payload as { origin?: string } | null)?.origin ?? "");
+      else if (isCeremonyEvent(payload)) this.events.push({ ...payload, via: "postMessage" });
+      else this.ignoredMessages.push(payload);
+    });
+  }
+
+  private async watchRedirects(page: Page, onRedirect: (url: string) => void) {
+    await page.exposeBinding("__signatureapiNavigation", (_source, url: string) => {
+      this.redirectNavigations.push(url);
+      onRedirect(url);
     });
     await page.addInitScript(() => {
       const navigation = (window as unknown as { navigation?: EventTarget }).navigation;
@@ -80,12 +149,6 @@ export class EventRecorder {
         }
       });
     });
-    return recorder;
-  }
-
-  async next(timeout = 30_000): Promise<CeremonyEvent & { via: string }> {
-    await expect.poll(() => this.events.length, { timeout, message: "no terminal ceremony event" }).toBeGreaterThan(0);
-    return this.events[0]!;
   }
 }
 
@@ -100,6 +163,15 @@ export async function openCeremony(page: Page, ceremonyUrl: string, delivery: De
   await page.route(`${EMBED_ORIGIN}/**`, (route) => route.fulfill({ contentType: "text/html; charset=utf-8", body: html }));
   await page.goto(`${EMBED_ORIGIN}/`);
   return page.frameLocator("#ceremony");
+}
+
+/**
+ * Opens a ceremony as the page itself, the way the apps load it, with
+ * `event_delivery=message`. Pair it with `EventRecorder.attachTopLevelMessages`.
+ */
+export async function openTopLevelWithMessages(page: Page, ceremonyUrl: string, extra: Record<string, string> = {}) {
+  await page.goto(embeddedUrl(ceremonyUrl, "message", extra));
+  return page;
 }
 
 type Root = Page | FrameLocator;

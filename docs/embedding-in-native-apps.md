@@ -1,6 +1,6 @@
 # Embedding SignatureAPI in native apps
 
-How to show a SignatureAPI signing ceremony inside an iOS or Android app, and what to expect from it. The ceremony behavior described here is exercised by the tests in this repository against SignatureAPI test mode: in WebKit (the engine behind `WKWebView`) and Chromium (the engine behind Android's WebView), and in a real `WKWebView` and Android WebView. Options that come from the API reference, rather than from the tests, link to it.
+How to show a SignatureAPI signing ceremony inside an iOS or Android app, and what to expect from it. The ceremony behavior described here is exercised by the tests in this repository against SignatureAPI test mode: in WebKit (the engine behind `WKWebView`) and Chromium (the engine behind Android's WebView), and in a real `WKWebView` and Android WebView. Behavior this repo can't reproduce, such as approvers, is stated as SignatureAPI behavior and links to the API reference.
 
 For the API reference, see the [SignatureAPI docs](https://signatureapi.com/docs), in particular [Embed signing in a mobile app](https://signatureapi.com/docs/api/guides/how-to/embed-mobile) and [Ceremony events](https://signatureapi.com/docs/embedded/ceremony-events).
 
@@ -52,18 +52,28 @@ The event type is the URL's host. Error details are form-encoded query parameter
 | URL | Meaning |
 |---|---|
 | `signatureapi-message://ceremony.completed/?` | The signer finished. |
-| `signatureapi-message://ceremony.canceled/?` | The signer canceled inside the ceremony. |
+| `signatureapi-message://ceremony.canceled/?` | The signer canceled inside the ceremony. Embedded signers see Cancel instead of Decline. |
+| `signatureapi-message://ceremony.declined/?` | An approver tapped Reject. This happens even when embedded ([API reference](https://signatureapi.com/docs/embedded/ceremony-events#event-types)). |
 | `signatureapi-message://ceremony.failed/?error_type=…&error_message=…` | The ceremony could not be used. |
+
+This demo creates only signers, so it never sees `ceremony.declined`. Handle it if your app embeds approvers.
 
 | `error_type` | When it happens |
 |---|---|
-| `unauthorized` | The link is no longer valid, for example because a newer ceremony replaced it. |
-| `already_completed` | The signer already completed this ceremony. |
-| `not_available` | The ceremony is no longer available ([API reference](https://signatureapi.com/docs/embedded/ceremony-events)). |
+| `unauthorized` | The link isn't valid: it is malformed, it expired, a newer ceremony replaced it, or a signing-provider return link expired. Each case has its own `error_message`. |
+| `already_completed` | The recipient already finished this ceremony, by signing or by declining. |
+| `not_available` | The ceremony can no longer be used, for example because the envelope was canceled or failed, or the recipient was replaced. |
+| `invalid_link` | The URL path isn't a ceremony link, for example because the URL was truncated. |
+| `obfuscated_ceremony` | The link was obfuscated to protect the ceremony and can't be used to sign. |
+| `unexpected_error` | Any other error. |
 
-Branch on `error_type`, not `error_message`. The message is user-facing copy and may change.
+The tests here produce `unauthorized` (a replaced link), `already_completed` and `invalid_link`. The other cases are SignatureAPI behavior; see the [API reference](https://signatureapi.com/docs/embedded/ceremony-events#error-types).
+
+Branch on `error_type`, and **treat an unknown `error_type` as a generic failure**: new values can appear. Don't branch on `error_message` and don't show it. It is a fixed English description for your logs, never translated, while the ceremony shows the signer translated text on screen. Show your own copy instead, as both apps here do.
 
 **Canceling from your own UI.** If the app offers its own close button, there is no ceremony event: treat it as canceled in the app. To keep canceling inside the ceremony only, add `allow_cancel=false` to the URL, which removes the ceremony's cancel controls.
+
+**Renderer crashes.** If the WebView's renderer crashes, there is no ceremony event either. The Android demo reports it from `onRenderProcessGone` as `ceremony.failed` with `error_type=webview_crashed`. That value is made up by this demo app; it is not a SignatureAPI error type. Treat a renderer crash as your app's own outcome, not as a ceremony event.
 
 ## Showing your own result screen
 
@@ -80,7 +90,7 @@ In practice, the defaults work:
 - **iOS:** the default `WKWebView` configuration works, including WebKit's third-party cookie blocking.
 - **Android:** DOM storage and third-party cookies can stay off, which are the WebView defaults. Only JavaScript needs to be on.
 
-The WebView contacts `sign.signatureapi.com`, `api.signatureapi.com` and Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`). Allow them if the app's network is restricted.
+The WebView contacts `sign.signatureapi.com`, `api.signatureapi.com`, `vault.signatureapi.com` and Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`). Allow them if the app's network is restricted. `vault.signatureapi.com` serves the document's page images as signed URLs, each valid for one hour. [`hosts.spec.ts`](../e2e/tests/hosts.spec.ts) checks both.
 
 ## Loading it in an iframe instead
 
@@ -95,13 +105,61 @@ If your SDK already embeds the ceremony in an `<iframe>` on the web, the same pa
 
 The top-level pattern is simpler: no host page, no `embeddable_in`, no message bridge. Prefer it unless you need to share the page with your web SDK.
 
+## Top-level with event_delivery=message
+
+`event_delivery=redirect` remains the recommended default. If you'd rather receive the event as a JavaScript message, keep loading the ceremony top-level and switch to `event_delivery=message`.
+
+When the ceremony ends it calls `parent.postMessage(payload, "*")`. Top-level, `parent` is the page's own window, so the page receives its own message: `{ "type": "ceremony.completed" }`, plus `error_type` and `error_message` on failure. Install a script that runs at document start and forwards it to native code only when `event.origin === "https://sign.signatureapi.com"` **and** `event.source === window`.
+
+[`e2e/support/top-level-message-bridge.js`](../e2e/support/top-level-message-bridge.js) is that script. Both apps embed an identical copy. It posts a JSON string, `{ "kind": "event", "payload": … }`, to an object named `signatureapiBridge`, and reports messages that fail the check as `"kind": "rejected"`. Accept only ceremony event types: the page can also receive unrelated messages from itself. The apps here accept `ceremony.completed`, `ceremony.canceled` and `ceremony.failed`, the events a signer's ceremony emits. If you embed approvers, accept `ceremony.declined` too.
+
+### iOS
+
+```swift
+let controller = configuration.userContentController
+controller.addUserScript(WKUserScript(source: bridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+controller.add(weakProxy, name: "signatureapiBridge") // the controller retains its handlers
+
+func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+    // Every frame can reach the handler: check the sender too.
+    guard message.frameInfo.isMainFrame,
+          message.frameInfo.securityOrigin.host == "sign.signatureapi.com",
+          let event = CeremonyEvent(messageBody: message.body) else { return }
+}
+```
+
+Remove the handler when the view goes away. See [`CeremonyWebView.swift`](../ios/SignatureAPIDemo/Ceremony/CeremonyWebView.swift).
+
+### Android
+
+Needs [`androidx.webkit`](https://developer.android.com/jetpack/androidx/releases/webkit). Check both features and fall back to redirect when either is missing:
+
+```kotlin
+val origins = setOf("https://sign.signatureapi.com")
+if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) &&
+    WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+) {
+    // Called on the UI thread, for every frame on the origin: keep the main frame's only.
+    WebViewCompat.addWebMessageListener(webView, "signatureapiBridge", origins) { _, message, sourceOrigin, isMainFrame, _ ->
+        if (!isMainFrame || sourceOrigin.host != "sign.signatureapi.com") return@addWebMessageListener
+        message.data?.let(CeremonyEvent::fromBridgeMessage)?.let(::end)
+    }
+    WebViewCompat.addDocumentStartJavaScript(webView, bridgeScript, origins)
+}
+```
+
+Add both before `loadUrl`. See [`CeremonyWebView.kt`](../android/app/src/main/java/com/signatureapi/demo/mobile/ceremony/CeremonyWebView.kt).
+
+The ceremony then doesn't navigate to `signatureapi-message://`; keeping the redirect interception in place is harmless. [`top-level-webview.spec.ts`](../e2e/tests/top-level-webview.spec.ts) tests the script in WebKit and Chromium.
+
 ## Link lifetime and resuming
 
-- A ceremony URL stays valid for **30 days**, until the signer completes it, or until a newer ceremony replaces it.
+- A ceremony URL is valid for **30 days by default**. The period is an account setting; contact SignatureAPI support to change it ([API reference](https://signatureapi.com/docs/api/resources/ceremonies/ceremony-url#url-expiration)).
 - It is a bearer credential: anyone holding it can sign. Don't log it, and don't store it on the device.
-- To resume after the app was backgrounded or killed, **ask your backend for the current URL** (read the envelope) and load it again. SignatureAPI issues a fresh URL for the same ceremony on every read, so the URL you get back differs from the first one but opens the same ceremony, with its own 30-day validity.
+- To resume after the app was backgrounded or killed, **ask your backend for the current URL** (read the envelope) and load it again. For a `standard` URL, the default `url_variant` and the one this repo uses, SignatureAPI issues a fresh URL for the same ceremony on every read, so the URL you get back differs from the first one but opens the same ceremony, with its own validity. A `short` URL stays the same until it expires; create a new ceremony to get another.
 - Creating a new ceremony for the signer revokes the previous URL. Opening the old one ends with `ceremony.failed` and `error_type=unauthorized`.
-- Opening a URL after the signer completed ends with `ceremony.failed` and `error_type=already_completed`.
+- Opening a URL after the signer completed ends with `ceremony.failed` and `error_type=already_completed`. SignatureAPI reports the same after the recipient declined.
+- After the recipient is replaced, or the envelope is canceled or fails, opening the URL ends with `error_type=not_available` ([API reference](https://signatureapi.com/docs/api/resources/ceremonies/ceremony-url#url-expiration)).
 
 A revoked URL still loads with HTTP 200. The ceremony page reports the problem once it runs, through the event above, so don't try to check a URL with a plain HTTP request.
 
@@ -115,11 +173,14 @@ A revoked URL still loads with HTTP 200. The ceremony page reports the problem o
 
 ## Automated testing
 
-To stop email link scanners from completing ceremonies, the ceremony arms completion only after it has seen input a person produces: a touch, a scroll wheel, keys, or a pointer moving across several positions. Without that, **Finish** opens a "Confirm to continue" dialog that asks for a second confirmation.
+To stop email link scanners from completing ceremonies, the ceremony arms completion only after it has seen input a person produces: a touch, a scroll wheel, a key, or the pointer at **4 distinct positions** on a 16px grid. Scrolling the page by itself doesn't count. Without that input, **Finish** opens a "Confirm to continue" dialog that asks for a second confirmation.
 
-- Real taps (XCUITest, UiAutomator) and Playwright's clicks count as human input.
-- JavaScript-dispatched clicks don't, for example Espresso-Web's `webClick()`. Add a real gesture first. The Android test here swipes the document with UiAutomator before signing.
+- Real taps (XCUITest, UiAutomator) count: they are touches.
+- A single Playwright click doesn't. It moves the pointer to one position, and that is not enough. The browser tests here pass because signing takes several clicks on different controls (the consent checkbox, **Agree and Continue**, **Sign here**, **Adopt and Sign**, **Finish**), so the pointer visits enough positions before **Finish**.
+- JavaScript-dispatched clicks don't count either, for example Espresso-Web's `webClick()`. Add a real gesture first. The Android test here swipes the document with UiAutomator before signing; the swipe's touches arm completion.
 - Don't confirm the dialog in tests. If it appears, the test is not behaving like a signer, and it should fail.
+
+[`organic-input.spec.ts`](../e2e/tests/organic-input.spec.ts) checks this: one click at **Finish**, after scrolling the page, or with the pointer at only three positions, gets the dialog; four positions, a key, a tap, or a wheel (Chromium only: Playwright has no wheel in mobile WebKit) complete the ceremony.
 
 Two more things help tests:
 

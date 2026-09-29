@@ -45,8 +45,9 @@ adb reverse tcp:3000 tcp:3000
 | File | |
 |---|---|
 | [`SigningViewModel.kt`](app/src/main/java/com/signatureapi/demo/mobile/SigningViewModel.kt) | The state machine: ready → preparing → signing → confirming → finished. Confirms completion with the server before showing "Document signed". |
-| [`ceremony/CeremonyWebView.kt`](app/src/main/java/com/signatureapi/demo/mobile/ceremony/CeremonyWebView.kt) | Loads the ceremony top-level and intercepts `signatureapi-message://` in `shouldOverrideUrlLoading`. Opens links that leave the ceremony in the browser, and reports a crashed renderer as a failure instead of crashing the app. |
+| [`ceremony/CeremonyWebView.kt`](app/src/main/java/com/signatureapi/demo/mobile/ceremony/CeremonyWebView.kt) | Loads the ceremony top-level and intercepts `signatureapi-message://` in `shouldOverrideUrlLoading`. Opens links that leave the ceremony in the browser, and reports a crashed renderer as a failure instead of crashing the app: `ceremony.failed` with `error_type` `webview_crashed`. That value is made up by this demo app, not a SignatureAPI error type; treat a renderer crash as your app's own outcome. |
 | [`ceremony/CeremonyEvent.kt`](app/src/main/java/com/signatureapi/demo/mobile/ceremony/CeremonyEvent.kt) | Parses the event URL. |
+| [`ceremony/CeremonyEventDelivery.kt`](app/src/main/java/com/signatureapi/demo/mobile/ceremony/CeremonyEventDelivery.kt) | Opt-in `event_delivery=message`: build with `-PeventDelivery=message` (default `redirect`, in `gradle.properties`), and a document-start script forwards the ceremony's `postMessage` to an `androidx.webkit` web message listener, falling back to redirect on WebViews without the features ([details](../docs/embedding-in-native-apps.md#top-level-with-event_deliverymessage)). [`MessageDeliverySigningTest`](app/src/androidTest/java/com/signatureapi/demo/mobile/MessageDeliverySigningTest.kt) runs in this mode as part of `./gradlew connectedDebugAndroidTest`; add `-Pandroid.testInstrumentationRunnerArguments.class=com.signatureapi.demo.mobile.MessageDeliverySigningTest` to run it alone. |
 | [`DemoServerClient.kt`](app/src/main/java/com/signatureapi/demo/mobile/DemoServerClient.kt) | Calls the demo server. |
 | [`ui/`](app/src/main/java/com/signatureapi/demo/mobile/ui/) | The three screens and the theme (signatureapi.com colors and type). |
 
@@ -71,7 +72,7 @@ With the server running and the port forwarded:
 
 For a server on another port, forward that port and pass `-PdemoServerUrl=http://localhost:<port>`.
 
-The tests click through the ceremony with Espresso-Web, using its stable hooks (`data-ceremony-step` and element names). Espresso-Web clicks come from JavaScript, and the ceremony only completes after it has seen real human input, so the test first swipes the document with UiAutomator. If the ceremony ever shows its "Confirm to continue" dialog, the test fails on purpose. See [Automated testing](../docs/embedding-in-native-apps.md#automated-testing).
+The tests click through the ceremony with Espresso-Web, using its stable hooks (`data-ceremony-step` and element names). Espresso-Web clicks come from JavaScript, and the ceremony only completes after it has seen real human input, so the test first swipes the document with UiAutomator: the swipe's touches count as human input. If the ceremony ever shows its "Confirm to continue" dialog, the test fails on purpose. See [Automated testing](../docs/embedding-in-native-apps.md#automated-testing).
 
 To keep the final screen visible when recording a run, add `-Pandroid.testInstrumentationRunnerArguments.recordingHoldSeconds=3`.
 
