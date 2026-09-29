@@ -1,0 +1,16 @@
+# Starts a signing and waits until the ceremony is on screen.
+appId: com.signatureapi.demo.reactnative
+---
+- runFlow:
+    file: launch-and-start.yaml
+    env:
+      DEMO_SERVER_URL: ${DEMO_SERVER_URL}
+      CEREMONY_HANDLER: ${CEREMONY_HANDLER}
+      SIMULATE_REVOKED_LINK: 'false'
+# Creating the envelope includes waiting for SignatureAPI to process it.
+- extendedWaitUntil:
+    visible:
+      id: close-ceremony
+    timeout: 60000
+- assertNotVisible:
+    id: start-error

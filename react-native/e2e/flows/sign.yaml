@@ -1,0 +1,41 @@
+# The app must intercept signatureapi-message://ceremony.completed and then
+# show "Document signed" only after the server confirms it.
+#
+# Organic input: the ceremony arms Finish only after it has seen input a person
+# produces (a touch, a scroll wheel, keys, or a pointer trail), so that a link
+# scanner's single synthetic click can't complete a ceremony. Maestro taps and
+# swipes go through the OS input pipeline as real touches, and the flow also
+# scrolls the document like a signer. If the ceremony ever shows its "Confirm
+# to continue" dialog instead, the final assertion fails, which is intended.
+appId: com.signatureapi.demo.reactnative
+name: Signing the sample document
+tags: [sign]
+---
+- runFlow:
+    file: ../subflows/open-ceremony.yaml
+    env:
+      DEMO_SERVER_URL: ${DEMO_SERVER_URL}
+      CEREMONY_HANDLER: ${CEREMONY_HANDLER}
+- runFlow:
+    file: ../subflows/check-agreement.yaml
+    env:
+      STATEMENT: By checking
+- tapOn: Agree and Continue
+- swipe:
+    direction: UP
+    duration: 600
+- swipe:
+    direction: DOWN
+    duration: 600
+- tapOn: Sign here
+- runFlow:
+    file: ../subflows/check-agreement.yaml
+    env:
+      STATEMENT: By selecting
+- tapOn: Adopt and Sign
+- tapOn: Finish
+- extendedWaitUntil:
+    visible:
+      id: result-title
+      text: Document signed
+    timeout: 60000
