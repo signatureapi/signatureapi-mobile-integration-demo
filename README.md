@@ -8,6 +8,7 @@ Tap a button, and the app creates a sample envelope, opens the signing ceremony 
 |---|---|---|
 | [iOS](ios/) | SwiftUI, iOS 17+ | `WKWebView` |
 | [Android](android/) | Jetpack Compose, Android 8.0+ (API 26) | `android.webkit.WebView` |
+| [React Native](react-native/) | React Native 0.87 (bare, New Architecture), iOS and Android | `react-native-webview` |
 
 Both apps talk to a small [demo server](server/) that holds the SignatureAPI key and creates envelopes. The key never ships in the apps.
 
@@ -99,6 +100,7 @@ The tests run real ceremonies against SignatureAPI test mode. Nothing is mocked.
 | [Browser](e2e/) | Events, errors, cookies and storage, iframe embedding, rotation and language, in WebKit (the engine behind `WKWebView`) and Chromium (the engine behind Android's WebView) | `cd e2e && npm test` |
 | [iOS](ios/) | A real `WKWebView` intercepts the events; signing and canceling end on the right screen | `xcodebuild test` (see [ios/README.md](ios/README.md)) |
 | [Android](android/) | A real Android WebView intercepts the events, on a device | `./gradlew connectedDebugAndroidTest` (see [android/README.md](android/README.md)) |
+| [React Native](react-native/) | `react-native-webview` intercepts the events on iOS and Android with either callback; signing, canceling and a replaced link end on the right screen. Unit tests cover the event parser and what `new URL()` does with event URLs | `npm run e2e:ios` / `npm run e2e:android` with Maestro, `npm test` (see [react-native/README.md](react-native/README.md)) |
 
 ## Repository layout
 
@@ -106,6 +108,7 @@ The tests run real ceremonies against SignatureAPI test mode. Nothing is mocked.
 server/    Demo backend (TypeScript, Express): creates envelopes, returns ceremony URLs
 ios/       iOS app (SwiftUI) and its UI tests
 android/   Android app (Jetpack Compose) and its instrumented tests
+react-native/  React Native app (iOS and Android), its Maestro flows and unit tests
 e2e/       Browser tests (Playwright): ceremony behavior in WebKit and Chromium
 design/    Shared brand fonts and their licenses
 docs/      Embedding guide and the demo recordings

@@ -1,0 +1,20 @@
+# A replaced link ends with ceremony.failed and error_type=unauthorized, which
+# must reach the app. The simulateRevokedLink launch argument makes the app
+# replace the signer's ceremony right after creating it and open the old link.
+appId: com.signatureapi.demo.reactnative
+name: Opening a replaced link
+tags: [fail]
+---
+- runFlow:
+    file: ../subflows/launch-and-start.yaml
+    env:
+      DEMO_SERVER_URL: ${DEMO_SERVER_URL}
+      CEREMONY_HANDLER: ${CEREMONY_HANDLER}
+      SIMULATE_REVOKED_LINK: 'true'
+- extendedWaitUntil:
+    visible:
+      id: result-title
+      text: Couldn.t open the document
+    # Creating and replacing the ceremony, then loading the old link.
+    timeout: 90000
+- assertVisible: This signing link is no longer valid\. Start again to get a new one\.

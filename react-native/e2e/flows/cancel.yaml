@@ -1,0 +1,20 @@
+# Cancelling inside the ceremony emits ceremony.canceled, which must reach the app.
+appId: com.signatureapi.demo.reactnative
+name: Cancelling inside the ceremony
+tags: [cancel]
+---
+- runFlow:
+    file: ../subflows/open-ceremony.yaml
+    env:
+      DEMO_SERVER_URL: ${DEMO_SERVER_URL}
+      CEREMONY_HANDLER: ${CEREMONY_HANDLER}
+- extendedWaitUntil:
+    visible: Cancel
+    timeout: 30000
+- tapOn: Cancel
+- tapOn: 'Yes'
+- extendedWaitUntil:
+    visible:
+      id: result-title
+      text: Signing canceled
+    timeout: 30000

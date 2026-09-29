@@ -1,0 +1,13 @@
+# Launches the app fresh with the run's configuration and taps Sign document.
+# Expects DEMO_SERVER_URL, CEREMONY_HANDLER and SIMULATE_REVOKED_LINK from the caller.
+appId: com.signatureapi.demo.reactnative
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+    arguments:
+      demoServerUrl: ${DEMO_SERVER_URL}
+      ceremonyHandler: ${CEREMONY_HANDLER}
+      simulateRevokedLink: ${SIMULATE_REVOKED_LINK}
+- tapOn:
+    id: sign-document

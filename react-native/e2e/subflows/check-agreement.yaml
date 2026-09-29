@@ -1,0 +1,20 @@
+# Checks the ceremony's agreement checkbox whose statement starts with STATEMENT.
+# WKWebView labels the checkbox with its statement. Android's WebView exposes
+# the statement as separate text (tapping it doesn't check the box), so tap the
+# input itself by its id (agr_…); only one agreement is on screen at a time.
+appId: com.signatureapi.demo.reactnative
+---
+- extendedWaitUntil:
+    visible: ${STATEMENT}.*
+    timeout: 30000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: ${STATEMENT}.*
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          id: 'agr_[A-Za-z0-9]+'
