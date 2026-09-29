@@ -28,7 +28,7 @@ Both apps talk to a small [demo server](server/) that holds the SignatureAPI key
 
 Both recordings are real UI test runs against SignatureAPI test mode. Select one for the full-quality video.
 
-**New to embedding in a native app?** Read [Embedding SignatureAPI in native apps](docs/embedding-in-native-apps.md). It covers the pattern, the events, cookies and storage, iframes, link lifetime and testing, and every claim in it is checked by this repo's tests.
+**New to embedding in a native app?** Read [Embedding SignatureAPI in native apps](docs/embedding-in-native-apps.md). It covers the pattern, the events, cookies and storage, iframes, link lifetime and testing, and every claim in it is checked by this repo's tests or, where this repo can't reproduce it (approvers, for example), linked to the API reference.
 
 ## How it works
 
@@ -96,7 +96,7 @@ The tests run real ceremonies against SignatureAPI test mode. Nothing is mocked.
 | Suite | What it proves | Run |
 |---|---|---|
 | [Server](server/) | Envelope creation, framing rules (CSP `frame-ancestors`), resuming and replacing links, input validation, no ceremony URL in logs | `cd server && npm test` |
-| [Browser](e2e/) | Events, errors, cookies and storage, iframe embedding, rotation and language, in WebKit (the engine behind `WKWebView`) and Chromium (the engine behind Android's WebView) | `cd e2e && npm test` |
+| [Browser](e2e/) | Events, errors, cookies and storage, network hosts, the human-input gate, iframe embedding, rotation and language, in WebKit (the engine behind `WKWebView`) and Chromium (the engine behind Android's WebView) | `cd e2e && npm test` |
 | [iOS](ios/) | A real `WKWebView` intercepts the events; signing and canceling end on the right screen | `xcodebuild test` (see [ios/README.md](ios/README.md)) |
 | [Android](android/) | A real Android WebView intercepts the events, on a device | `./gradlew connectedDebugAndroidTest` (see [android/README.md](android/README.md)) |
 

@@ -22,9 +22,11 @@ export interface StartedCeremony {
 }
 
 /**
- * The ceremony URL carries a signed token that SignatureAPI re-issues on every
- * read, each valid for 30 days. Two reads return different URLs for the same
- * ceremony, so never compare URLs to decide whether a ceremony changed.
+ * The ceremony URL carries a signed token. For a `standard` URL, the default
+ * `url_variant` and the one this server uses, SignatureAPI re-issues it on every
+ * read, each with its own validity (30 days by default, an account setting).
+ * Two reads return different URLs for the same ceremony, so never compare URLs
+ * to decide whether a ceremony changed. A `short` URL stays the same until it expires.
  */
 export interface CurrentCeremony {
   ceremonyUrl: string;

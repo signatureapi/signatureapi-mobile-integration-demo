@@ -15,8 +15,10 @@ export interface CeremonyEvent {
 }
 
 /**
- * The only events the ceremony emits. Over postMessage the apps accept nothing
- * else: a top-level page can also receive unrelated messages from itself.
+ * The events a signer's ceremony emits (an approver's Reject also emits
+ * `ceremony.declined`, but the demo server creates only signers). Over
+ * postMessage the apps accept nothing else: a top-level page can also receive
+ * unrelated messages from itself.
  */
 const TERMINAL_EVENTS = new Set(["ceremony.completed", "ceremony.canceled", "ceremony.failed"]);
 

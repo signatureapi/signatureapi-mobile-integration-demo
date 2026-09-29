@@ -60,6 +60,32 @@ test.describe("top-level WebView with event_delivery=redirect", () => {
     expect(await events.next()).toMatchObject({ type: "ceremony.failed", error_type: "unauthorized" });
   });
 
+  test("error_message is a fixed English description, not the signer's translated text", async ({ page, request }) => {
+    const ceremony = await startCeremony(request, { language: "es" });
+    await replaceCeremony(request, ceremony.recipientId);
+    const events = await EventRecorder.attach(page, "redirect");
+
+    await openCeremony(page, ceremony.ceremonyUrl, "redirect");
+
+    expect(await events.next()).toMatchObject({
+      type: "ceremony.failed",
+      error_type: "unauthorized",
+      error_message: "The link is no longer valid.",
+    });
+    await expect(page.getByText("El enlace ya no es válido")).toBeVisible();
+  });
+
+  test("a URL whose path isn't a ceremony link fails with error_type=invalid_link", async ({ page, request }) => {
+    const ceremony = await startCeremony(request);
+    const truncated = new URL(ceremony.ceremonyUrl);
+    truncated.pathname = "/en/not-a-ceremony";
+    const events = await EventRecorder.attach(page, "redirect");
+
+    await openCeremony(page, truncated.toString(), "redirect");
+
+    expect(await events.next()).toMatchObject({ type: "ceremony.failed", error_type: "invalid_link" });
+  });
+
   test("reopening a completed ceremony fails with error_type=already_completed", async ({ page, request }) => {
     const ceremony = await startCeremony(request);
     const first = await EventRecorder.attach(page, "redirect");

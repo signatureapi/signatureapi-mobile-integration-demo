@@ -6,11 +6,14 @@ import Foundation
 /// navigating to `signatureapi-message://<type>/?error_type=…&error_message=…`.
 /// With `event_delivery=message` it posts `{ type, error_type?, error_message? }`,
 /// which the top-level message bridge forwards (see ``CeremonyWebView``).
-/// Branch on `type` and `errorType` only: `errorMessage` is user-facing copy.
+/// Branch on `type` and `errorType` only. `errorMessage` is a fixed English
+/// description for logs, never translated: show the signer the app's own copy
+/// (``SigningFlow`` does), and treat an unknown `errorType` as a generic failure.
 struct CeremonyEvent: Equatable, Sendable {
     static let scheme = "signatureapi-message"
 
-    /// The events the ceremony emits.
+    /// The events a signer's ceremony emits. An approver's Reject button also
+    /// emits `ceremony.declined`; this demo creates only signers.
     static let terminalTypes: Set = ["ceremony.completed", "ceremony.canceled", "ceremony.failed"]
 
     let type: String

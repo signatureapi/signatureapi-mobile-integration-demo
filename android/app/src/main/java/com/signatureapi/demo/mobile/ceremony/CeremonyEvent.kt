@@ -12,7 +12,9 @@ import kotlinx.serialization.json.Json
  * to `signatureapi-message://<type>/?error_type=…&error_message=…`.
  * With `event_delivery=message` it posts `{ type, error_type?, error_message? }`,
  * which the top-level message bridge forwards (see [CeremonyWebView]).
- * Branch on [type] and [errorType] only: [errorMessage] is user-facing copy.
+ * Branch on [type] and [errorType] only. [errorMessage] is a fixed English
+ * description for logs, never translated: show the signer the app's own copy
+ * (SigningViewModel does), and treat an unknown [errorType] as a generic failure.
  */
 data class CeremonyEvent(
     val type: String,
@@ -25,7 +27,10 @@ data class CeremonyEvent(
     companion object {
         const val SCHEME = "signatureapi-message"
 
-        /** The events the ceremony emits. */
+        /**
+         * The events a signer's ceremony emits. An approver's Reject button also
+         * emits `ceremony.declined`; this demo creates only signers.
+         */
         val TERMINAL_TYPES = setOf("ceremony.completed", "ceremony.canceled", "ceremony.failed")
 
         private val json = Json { ignoreUnknownKeys = true }

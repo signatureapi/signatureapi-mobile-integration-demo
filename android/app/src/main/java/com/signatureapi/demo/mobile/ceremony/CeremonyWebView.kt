@@ -146,6 +146,8 @@ private class CeremonyWebViewClient(private val onEvent: (CeremonyEvent) -> Unit
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
         // A crashed WebView cannot be reused. Report it and let the screen close.
+        // "webview_crashed" is made up by this demo app, not a SignatureAPI
+        // error_type: a renderer crash is the app's own outcome, not the ceremony's.
         end(CeremonyEvent("ceremony.failed", "webview_crashed", "The signing page stopped unexpectedly."))
         return true
     }
