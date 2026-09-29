@@ -40,12 +40,50 @@ final class EmbeddedSigningUITests: XCTestCase {
         XCTAssertTrue(title.wait(for: \.label, toEqual: "Signing canceled", timeout: 30), "last result title: \(title.label)")
     }
 
+    // MARK: event_delivery=message
+
+    /// Same flow with the opt-in message delivery: the ceremony posts
+    /// ceremony.completed to its own window and the bridge script forwards it.
+    @MainActor func testSigningTheSampleDocumentWithMessageDelivery() throws {
+        let app = launch(eventDelivery: "message")
+        let web = try openCeremony(in: app)
+
+        tapWhenReady(try checkbox(in: web, labelPrefix: "By checking"))
+        tapWhenReady(web.buttons["Agree and Continue"])
+        tapWhenReady(web.buttons["Sign here"])
+        tapWhenReady(try checkbox(in: web, labelPrefix: "By selecting"))
+        tapWhenReady(web.buttons["Adopt and Sign"])
+        tapWhenReady(web.buttons["Finish"])
+
+        let title = app.staticTexts["result-title"]
+        XCTAssertTrue(title.wait(for: \.label, toEqual: "Document signed", timeout: 45), "last result title: \(title.label)")
+    }
+
+    /// ceremony.canceled must reach the app through the message handler too.
+    @MainActor func testCancellingInsideTheCeremonyWithMessageDelivery() throws {
+        let app = launch(eventDelivery: "message")
+        let web = try openCeremony(in: app)
+
+        tapWhenReady(web.buttons["Cancel"])
+        tapWhenReady(web.buttons["Yes"])
+
+        let title = app.staticTexts["result-title"]
+        XCTAssertTrue(title.wait(for: \.label, toEqual: "Signing canceled", timeout: 30), "last result title: \(title.label)")
+    }
+
     // MARK: Helpers
 
-    @MainActor private func launch() -> XCUIApplication {
+    /// `eventDelivery` sets the app's `CEREMONY_EVENT_DELIVERY`. Without it the
+    /// runner's own value passes through (TEST_RUNNER_CEREMONY_EVENT_DELIVERY),
+    /// and without that the app uses its default, redirect.
+    @MainActor private func launch(eventDelivery: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
-        if let server = ProcessInfo.processInfo.environment["DEMO_SERVER_URL"] {
+        let environment = ProcessInfo.processInfo.environment
+        if let server = environment["DEMO_SERVER_URL"] {
             app.launchEnvironment["DEMO_SERVER_URL"] = server
+        }
+        if let delivery = eventDelivery ?? environment["CEREMONY_EVENT_DELIVERY"] {
+            app.launchEnvironment["CEREMONY_EVENT_DELIVERY"] = delivery
         }
         app.launch()
         return app

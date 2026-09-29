@@ -95,6 +95,53 @@ If your SDK already embeds the ceremony in an `<iframe>` on the web, the same pa
 
 The top-level pattern is simpler: no host page, no `embeddable_in`, no message bridge. Prefer it unless you need to share the page with your web SDK.
 
+## Top-level with event_delivery=message
+
+`event_delivery=redirect` remains the recommended default. If you'd rather receive the event as a JavaScript message, keep loading the ceremony top-level and switch to `event_delivery=message`.
+
+When the ceremony ends it calls `parent.postMessage(payload, "*")`. Top-level, `parent` is the page's own window, so the page receives its own message: `{ "type": "ceremony.completed" }`, plus `error_type` and `error_message` on failure. Install a script that runs at document start and forwards it to native code only when `event.origin === "https://sign.signatureapi.com"` **and** `event.source === window`.
+
+[`e2e/support/top-level-message-bridge.js`](../e2e/support/top-level-message-bridge.js) is that script. Both apps embed an identical copy. It posts a JSON string, `{ "kind": "event", "payload": … }`, to an object named `signatureapiBridge`, and reports messages that fail the check as `"kind": "rejected"`. Accept only the three event types: the page can also receive unrelated messages from itself.
+
+### iOS
+
+```swift
+let controller = configuration.userContentController
+controller.addUserScript(WKUserScript(source: bridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+controller.add(weakProxy, name: "signatureapiBridge") // the controller retains its handlers
+
+func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+    // Every frame can reach the handler: check the sender too.
+    guard message.frameInfo.isMainFrame,
+          message.frameInfo.securityOrigin.host == "sign.signatureapi.com",
+          let event = CeremonyEvent(messageBody: message.body) else { return }
+}
+```
+
+Remove the handler when the view goes away. See [`CeremonyWebView.swift`](../ios/SignatureAPIDemo/Ceremony/CeremonyWebView.swift).
+
+### Android
+
+Needs [`androidx.webkit`](https://developer.android.com/jetpack/androidx/releases/webkit). Check both features and fall back to redirect when either is missing:
+
+```kotlin
+val origins = setOf("https://sign.signatureapi.com")
+if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) &&
+    WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+) {
+    // Called on the UI thread, for every frame on the origin: keep the main frame's only.
+    WebViewCompat.addWebMessageListener(webView, "signatureapiBridge", origins) { _, message, sourceOrigin, isMainFrame, _ ->
+        if (!isMainFrame || sourceOrigin.host != "sign.signatureapi.com") return@addWebMessageListener
+        message.data?.let(CeremonyEvent::fromBridgeMessage)?.let(::end)
+    }
+    WebViewCompat.addDocumentStartJavaScript(webView, bridgeScript, origins)
+}
+```
+
+Add both before `loadUrl`. See [`CeremonyWebView.kt`](../android/app/src/main/java/com/signatureapi/demo/mobile/ceremony/CeremonyWebView.kt).
+
+The ceremony then doesn't navigate to `signatureapi-message://`; keeping the redirect interception in place is harmless. [`top-level-webview.spec.ts`](../e2e/tests/top-level-webview.spec.ts) tests the script in WebKit and Chromium.
+
 ## Link lifetime and resuming
 
 - A ceremony URL stays valid for **30 days**, until the signer completes it, or until a newer ceremony replaces it.

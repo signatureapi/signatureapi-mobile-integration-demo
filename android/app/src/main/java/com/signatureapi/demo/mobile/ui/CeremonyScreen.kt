@@ -14,12 +14,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import com.signatureapi.demo.mobile.ceremony.CeremonyEvent
+import com.signatureapi.demo.mobile.ceremony.CeremonyEventDelivery
 import com.signatureapi.demo.mobile.ceremony.CeremonyWebView
 
 /** Screen 2: the ceremony, full screen, under a thin native bar the app owns. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CeremonyScreen(ceremonyUrl: String, onEvent: (CeremonyEvent) -> Unit, onClose: () -> Unit) {
+fun CeremonyScreen(
+    ceremonyUrl: String,
+    onEvent: (CeremonyEvent) -> Unit,
+    onClose: () -> Unit,
+    eventDelivery: CeremonyEventDelivery = CeremonyEventDelivery.Redirect,
+) {
     BackHandler(onBack = onClose)
     Column(Modifier.fillMaxSize()) {
         CenterAlignedTopAppBar(
@@ -37,6 +43,7 @@ fun CeremonyScreen(ceremonyUrl: String, onEvent: (CeremonyEvent) -> Unit, onClos
                 .fillMaxSize()
                 .imePadding()
                 .testTag("ceremony-webview"),
+            eventDelivery = eventDelivery,
         )
     }
 }

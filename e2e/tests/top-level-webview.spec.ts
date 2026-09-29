@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { EventRecorder, acceptConsent, cancelFromToolbar, openCeremony, signAndFinish } from "../support/ceremony.ts";
+import {
+  CEREMONY_ORIGIN,
+  EventRecorder,
+  acceptConsent,
+  cancelFromToolbar,
+  openCeremony,
+  openTopLevelWithMessages,
+  signAndFinish,
+} from "../support/ceremony.ts";
 import { envelopeSummary, replaceCeremony, signerStatus, startCeremony } from "../support/demo-server.ts";
 
 // The recommended native pattern: load the ceremony as the WebView's top-level
@@ -107,5 +115,71 @@ test.describe("top-level WebView with event_delivery=redirect", () => {
 
     await expect(page.locator("html")).toHaveAttribute("lang", /^es/);
     await expect(page.getByRole("button", { name: "Agree and Continue" })).toHaveCount(0);
+  });
+});
+
+// The opt-in alternative: the same top-level page with event_delivery=message.
+// Loaded top-level, the ceremony's parent is its own window, so it posts the
+// event to itself. top-level-message-bridge.js, the document-start script the
+// apps install, forwards it when the origin and source check passes.
+
+test.describe("top-level WebView with event_delivery=message", () => {
+  test("completes, forwards ceremony.completed, and the server confirms it", async ({ page, request }) => {
+    const ceremony = await startCeremony(request);
+    const events = await EventRecorder.attachTopLevelMessages(page);
+
+    await openTopLevelWithMessages(page, ceremony.ceremonyUrl);
+    await signAndFinish(page);
+
+    expect(await events.next()).toEqual({ type: "ceremony.completed", via: "postMessage" });
+    await expect.poll(() => signerStatus(request, ceremony.envelopeId), { timeout: 30_000 }).toBe("completed");
+    expect(events.redirectNavigations).toEqual([]);
+    expect(events.rejectedOrigins).toEqual([]);
+  });
+
+  test("cancelling forwards ceremony.canceled and leaves the envelope open", async ({ page, request }) => {
+    const ceremony = await startCeremony(request);
+    const events = await EventRecorder.attachTopLevelMessages(page);
+
+    await openTopLevelWithMessages(page, ceremony.ceremonyUrl);
+    await acceptConsent(page);
+    await cancelFromToolbar(page);
+
+    expect(await events.next()).toEqual({ type: "ceremony.canceled", via: "postMessage" });
+    expect((await envelopeSummary(request, ceremony.envelopeId)).status).toBe("in_progress");
+    expect(events.redirectNavigations).toEqual([]);
+  });
+
+  test("a replaced link forwards ceremony.failed with error_type=unauthorized", async ({ page, request }) => {
+    const ceremony = await startCeremony(request);
+    await replaceCeremony(request, ceremony.recipientId);
+    const events = await EventRecorder.attachTopLevelMessages(page);
+
+    await openTopLevelWithMessages(page, ceremony.ceremonyUrl);
+
+    const event = await events.next();
+    expect(event).toMatchObject({ type: "ceremony.failed", error_type: "unauthorized", via: "postMessage" });
+    expect(typeof event.error_message).toBe("string");
+    expect(events.redirectNavigations).toEqual([]);
+  });
+
+  test("rejects messages from any other window, even on the ceremony's origin", async ({ page, request }) => {
+    const ceremony = await startCeremony(request);
+    const events = await EventRecorder.attachTopLevelMessages(page);
+    await openTopLevelWithMessages(page, ceremony.ceremonyUrl);
+    await expect(page.getByRole("button", { name: "Agree and Continue" })).toBeVisible();
+
+    // A same-origin child frame passes the origin check; only the source check stops it.
+    await page.evaluate(() => {
+      const frame = document.createElement("iframe");
+      frame.name = "intruder";
+      document.body.append(frame);
+    });
+    const intruder = page.frame({ name: "intruder" });
+    expect(intruder).not.toBeNull();
+    await intruder!.evaluate(() => parent.postMessage({ type: "ceremony.completed" }, "*"));
+
+    await expect.poll(() => events.rejectedOrigins).toEqual([CEREMONY_ORIGIN]);
+    expect(events.events).toEqual([]);
   });
 });

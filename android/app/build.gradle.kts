@@ -19,6 +19,10 @@ android {
         val demoServerUrl = providers.gradleProperty("demoServerUrl").get()
         buildConfigField("String", "DEMO_SERVER_URL", "\"$demoServerUrl\"")
 
+        val eventDelivery = providers.gradleProperty("eventDelivery").get()
+        require(eventDelivery in setOf("redirect", "message")) { "eventDelivery must be redirect or message, not \"$eventDelivery\"" }
+        buildConfigField("String", "EVENT_DELIVERY", "\"$eventDelivery\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -88,6 +92,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.webkit)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
