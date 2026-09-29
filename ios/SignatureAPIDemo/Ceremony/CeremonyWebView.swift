@@ -1,5 +1,8 @@
+import OSLog
 import SwiftUI
 import WebKit
+
+private let log = Logger(subsystem: "com.signatureapi.demo.mobile", category: "CeremonyWebView")
 
 /// Shows a SignatureAPI ceremony as the WKWebView's page and reports how it ended.
 ///
@@ -64,6 +67,7 @@ struct CeremonyWebView: UIViewRepresentable {
         #if DEBUG
         webView.isInspectable = true
         #endif
+        log.info("Loading the ceremony with event_delivery=\(eventDelivery.rawValue, privacy: .public)")
         context.coordinator.url = CeremonyLink.embedded(ceremonyURL, delivery: eventDelivery)
         webView.load(URLRequest(url: context.coordinator.url!))
         return webView
@@ -119,6 +123,7 @@ struct CeremonyWebView: UIViewRepresentable {
                   origin.protocol == "https", origin.host == CeremonyLink.host, origin.port == 0,
                   let event = CeremonyEvent(messageBody: message.body)
             else { return }
+            log.info("Received \(event.type, privacy: .public) from the message bridge")
             end(with: event)
         }
 

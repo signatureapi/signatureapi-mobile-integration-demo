@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -50,15 +51,23 @@ fun CeremonyWebView(
                 webViewClient = client
                 val delivery = when (eventDelivery) {
                     CeremonyEventDelivery.Message ->
-                        if (installMessageBridge(this, client::end)) eventDelivery else CeremonyEventDelivery.Redirect
+                        if (installMessageBridge(this, client::end)) {
+                            eventDelivery
+                        } else {
+                            Log.w(TAG, "This WebView lacks WEB_MESSAGE_LISTENER or DOCUMENT_START_SCRIPT; using redirect")
+                            CeremonyEventDelivery.Redirect
+                        }
                     CeremonyEventDelivery.Redirect -> eventDelivery
                 }
+                Log.i(TAG, "Loading the ceremony with event_delivery=${delivery.parameter}")
                 loadUrl(CeremonyLink.embedded(ceremonyUrl, delivery))
             }
         },
         onRelease = { it.destroy() },
     )
 }
+
+private const val TAG = "CeremonyWebView"
 
 /** The `window` object the bridge script posts to. */
 private const val BRIDGE_OBJECT = "signatureapiBridge"
@@ -94,18 +103,18 @@ private val MESSAGE_BRIDGE_SCRIPT = """
  * Returns false, installing nothing, when this WebView lacks either feature.
  */
 private fun installMessageBridge(webView: WebView, onEvent: (CeremonyEvent) -> Unit): Boolean {
-    if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) ||
-        !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-    ) {
-        return false
-    }
+    // Two separate guards: lint's RequiresFeature check doesn't see through `||`.
+    if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return false
+    if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return false
     val allowedOrigins = setOf(CeremonyLink.ORIGIN)
     // The listener first: the script can then rely on window.signatureapiBridge.
     // Both are injected into every frame on the ceremony's origin, so only the
     // main frame's messages count. The listener is called on the UI thread.
     WebViewCompat.addWebMessageListener(webView, BRIDGE_OBJECT, allowedOrigins) { _, message, sourceOrigin, isMainFrame, _ ->
         if (!isMainFrame || !sourceOrigin.isCeremonyOrigin()) return@addWebMessageListener
-        message.data?.let(CeremonyEvent::fromBridgeMessage)?.let(onEvent)
+        val event = message.data?.let(CeremonyEvent::fromBridgeMessage) ?: return@addWebMessageListener
+        Log.i(TAG, "Received ${event.type} from the message bridge")
+        onEvent(event)
     }
     WebViewCompat.addDocumentStartJavaScript(webView, MESSAGE_BRIDGE_SCRIPT, allowedOrigins)
     return true

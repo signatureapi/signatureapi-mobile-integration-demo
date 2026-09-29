@@ -16,15 +16,9 @@ final class EmbeddedSigningUITests: XCTestCase {
         let app = launch()
         let web = try openCeremony(in: app)
 
-        tapWhenReady(try checkbox(in: web, labelPrefix: "By checking"))
-        tapWhenReady(web.buttons["Agree and Continue"])
-        tapWhenReady(web.buttons["Sign here"])
-        tapWhenReady(try checkbox(in: web, labelPrefix: "By selecting"))
-        tapWhenReady(web.buttons["Adopt and Sign"])
-        tapWhenReady(web.buttons["Finish"])
+        try signAndFinish(in: web)
 
-        let title = app.staticTexts["result-title"]
-        XCTAssertTrue(title.wait(for: \.label, toEqual: "Document signed", timeout: 45), "last result title: \(title.label)")
+        expectResult("Document signed", in: app, timeout: 45)
         holdForRecording()
     }
 
@@ -33,11 +27,9 @@ final class EmbeddedSigningUITests: XCTestCase {
         let app = launch()
         let web = try openCeremony(in: app)
 
-        tapWhenReady(web.buttons["Cancel"])
-        tapWhenReady(web.buttons["Yes"])
+        cancelInsideTheCeremony(in: web)
 
-        let title = app.staticTexts["result-title"]
-        XCTAssertTrue(title.wait(for: \.label, toEqual: "Signing canceled", timeout: 30), "last result title: \(title.label)")
+        expectResult("Signing canceled", in: app, timeout: 30)
     }
 
     // MARK: event_delivery=message
@@ -48,15 +40,10 @@ final class EmbeddedSigningUITests: XCTestCase {
         let app = launch(eventDelivery: "message")
         let web = try openCeremony(in: app)
 
-        tapWhenReady(try checkbox(in: web, labelPrefix: "By checking"))
-        tapWhenReady(web.buttons["Agree and Continue"])
-        tapWhenReady(web.buttons["Sign here"])
-        tapWhenReady(try checkbox(in: web, labelPrefix: "By selecting"))
-        tapWhenReady(web.buttons["Adopt and Sign"])
-        tapWhenReady(web.buttons["Finish"])
+        try signAndFinish(in: web)
 
-        let title = app.staticTexts["result-title"]
-        XCTAssertTrue(title.wait(for: \.label, toEqual: "Document signed", timeout: 45), "last result title: \(title.label)")
+        expectResult("Document signed", in: app, timeout: 45)
+        holdForRecording()
     }
 
     /// ceremony.canceled must reach the app through the message handler too.
@@ -64,11 +51,9 @@ final class EmbeddedSigningUITests: XCTestCase {
         let app = launch(eventDelivery: "message")
         let web = try openCeremony(in: app)
 
-        tapWhenReady(web.buttons["Cancel"])
-        tapWhenReady(web.buttons["Yes"])
+        cancelInsideTheCeremony(in: web)
 
-        let title = app.staticTexts["result-title"]
-        XCTAssertTrue(title.wait(for: \.label, toEqual: "Signing canceled", timeout: 30), "last result title: \(title.label)")
+        expectResult("Signing canceled", in: app, timeout: 30)
     }
 
     // MARK: Helpers
@@ -98,6 +83,27 @@ final class EmbeddedSigningUITests: XCTestCase {
             XCTFail(error.exists ? "Could not start: \(error.label)" : "The ceremony did not load")
         }
         return web
+    }
+
+    /// Accepts the disclosure, adopts the typed signature and taps Finish.
+    @MainActor private func signAndFinish(in web: XCUIElement) throws {
+        tapWhenReady(try checkbox(in: web, labelPrefix: "By checking"))
+        tapWhenReady(web.buttons["Agree and Continue"])
+        tapWhenReady(web.buttons["Sign here"])
+        tapWhenReady(try checkbox(in: web, labelPrefix: "By selecting"))
+        tapWhenReady(web.buttons["Adopt and Sign"])
+        tapWhenReady(web.buttons["Finish"])
+    }
+
+    /// Cancels through the ceremony's own cancel control.
+    @MainActor private func cancelInsideTheCeremony(in web: XCUIElement) {
+        tapWhenReady(web.buttons["Cancel"])
+        tapWhenReady(web.buttons["Yes"])
+    }
+
+    @MainActor private func expectResult(_ expected: String, in app: XCUIApplication, timeout: TimeInterval, file: StaticString = #filePath, line: UInt = #line) {
+        let title = app.staticTexts["result-title"]
+        XCTAssertTrue(title.wait(for: \.label, toEqual: expected, timeout: timeout), "last result title: \(title.label)", file: file, line: line)
     }
 
     /// Keeps the final screen up for screen recordings:
